@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Truthify - AI Content Protection</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: {} }
+        }
+        // Load theme early to prevent flash
+        if (localStorage.getItem('truthify_theme') === 'dark') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/feather-icons"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .drag-active { border-color: #3b82f6 !important; background-color: rgba(59, 130, 246, 0.1) !important; }
+        /* Toast notification */
+        .toast-enter { transform: translateY(100%); opacity: 0; }
+        .toast-enter-active { transform: translateY(0); opacity: 1; transition: all 0.3s ease-out; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-50 transition-colors duration-200">
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-3"></div>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 w-96 max-w-full border border-slate-200 dark:border-slate-700">
+            <div class="flex items-center gap-3 mb-6 justify-center">
+                <div class="bg-blue-600 p-2 rounded-lg text-white"><i data-feather="shield"></i></div>
+                <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Truthify</h2>
+            </div>
+            <h3 class="text-lg font-medium text-slate-700 dark:text-slate-300 text-center mb-6">Sign in to your account</h3>
+            <p class="text-xs text-center text-slate-500 mb-4">Hint: Use admin / password</p>
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Username</label>
+                    <input type="text" id="login-username" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Password</label>
+                    <input type="password" id="login-password" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white" required>
+                </div>
+                <div id="login-error" class="text-red-500 text-sm hidden">Invalid credentials.</div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg transition-colors">Sign In</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Report Modal -->
+    <div id="report-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 w-[800px] max-w-full border border-slate-200 dark:border-slate-700 max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-4 mb-4">
+                <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Legal Report: AI Manipulation</h2>
+                <button id="close-report-btn" class="text-slate-500 hover:text-slate-700 dark:hover:text-white"><i data-feather="x"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto prose dark:prose-invert max-w-none text-sm text-slate-700 dark:text-slate-300">
+                <p><strong>Date:</strong> <span id="report-date"></span></p>
+                <p><strong>Reference:</strong> TRUTHIFY-<span id="report-ref"></span></p>
+                <hr>
+                <h3>Executive Summary</h3>
+                <p>This report details the findings of the Truthify AI Content Protection platform regarding the submitted media file. Based on our advanced Vision Transformer model (Ateeqq), the media has been flagged as <strong>AI Generated</strong>.</p>
+                <h3>Technical Findings</h3>
+                <ul>
+                    <li><strong>Probability:</strong> <span id="report-prob"></span></li>
+                    <li><strong>Detected Generator:</strong> Vision Transformer (Ateeqq)</li>
+                    <li><strong>EXIF Anomalies:</strong> Clean</li>
+                </ul>
+                <p><em>This report is generated automatically and is intended for informational and preliminary legal review purposes only.</em></p>
+            </div>
+            <div class="mt-6 flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <button class="bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 font-medium py-2 px-4 rounded-lg transition-colors" onclick="document.getElementById('report-modal').classList.add('hidden')">Close</button>
+                <button class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors">Download PDF</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col h-full flex-shrink-0 transition-colors duration-200">
+        <div class="p-6 flex items-center gap-3">
+            <div class="bg-blue-600 p-2 rounded-lg text-white">
+                <i data-feather="shield" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold text-slate-900 dark:text-white leading-none">Truthify</h1>
+                <span class="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">AI Content Protection</span>
+            </div>
+        </div>
+        
+        <nav class="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+            <a href="#" onclick="switchView('dashboard')" id="nav-dashboard" class="nav-link flex items-center gap-3 px-3 py-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg font-medium text-sm transition-colors">
+                <i data-feather="grid" class="w-4 h-4"></i> Dashboard
+            </a>
+            <a href="#" onclick="switchView('scan')" id="nav-scan" class="nav-link flex items-center gap-3 px-3 py-2.5 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg font-medium text-sm transition-colors">
+                <i data-feather="upload-cloud" class="w-4 h-4"></i> Scan Image
+            </a>
+            <a href="#" onclick="switchView('history')" id="nav-history" class="nav-link flex items-center gap-3 px-3 py-2.5 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg font-medium text-sm transition-colors">
+                <i data-feather="clock" class="w-4 h-4"></i> History
+            </a>
+            <div class="my-4 border-t border-slate-100 dark:border-slate-700"></div>
+            <a href="#" onclick="switchView('about')" id="nav-about" class="nav-link flex items-center gap-3 px-3 py-2.5 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg font-medium text-sm transition-colors">
+                <i data-feather="info" class="w-4 h-4"></i> About
+            </a>
+            <a href="#" onclick="switchView('settings')" id="nav-settings" class="nav-link flex items-center gap-3 px-3 py-2.5 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg font-medium text-sm transition-colors">
+                <i data-feather="settings" class="w-4 h-4"></i> Settings
+            </a>
+        </nav>
+    </aside>
+
+    <!-- Main Content wrapper -->
+    <div class="flex-1 flex flex-col h-screen overflow-hidden">
+        
+        <!-- Header -->
+        <header class="h-20 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-8 flex-shrink-0 z-10 transition-colors duration-200">
+            <div>
+                <h2 id="welcome-text" class="text-xl font-bold text-slate-900 dark:text-white">Truthify Defense Center</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Protecting your digital authenticity.</p>
+            </div>
+            
+            <div class="flex items-center gap-6">
+                <!-- Theme Toggle -->
+                <button id="theme-toggle" class="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                    <i data-feather="moon" id="theme-icon-dark" class="w-5 h-5 hidden"></i>
+                    <i data-feather="sun" id="theme-icon-light" class="w-5 h-5"></i>
+                </button>
+
+                <div class="flex items-center gap-4 border-l border-slate-200 dark:border-slate-700 pl-6 relative">
+                    <!-- Notifications -->
+                    <button id="notif-btn" class="relative p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                        <i data-feather="bell" class="w-5 h-5"></i>
+                        <span id="notif-badge" class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full hidden"></span>
+                    </button>
+                    <!-- Notif Dropdown -->
+                    <div id="notif-dropdown" class="absolute top-full right-40 mt-2 w-80 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg hidden flex flex-col overflow-hidden">
+                        <div class="p-3 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
+                            <span class="font-bold text-sm">Notifications</span>
+                            <button id="clear-notif-btn" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">Clear All</button>
+                        </div>
+                        <div id="notif-list" class="max-h-64 overflow-y-auto p-2 text-sm">
+                            <div class="p-3 text-slate-500 text-center">No notifications.</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Profile Area -->
+                    <div id="profile-area" class="flex items-center gap-3 cursor-pointer p-1 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                        <button id="login-trigger-btn" class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">Log in</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Dynamic Views Area -->
+        <main class="flex-1 overflow-y-auto p-8 relative">
+            <div class="max-w-7xl mx-auto w-full">
+
+                <!-- VIEW: DASHBOARD (Includes Scan and Result panel) -->
+                <div id="view-dashboard" class="view-section space-y-6">
+                    <!-- Live Statistics -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                        <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col transition-colors">
+                            <div class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Images Scanned</div>
+                            <div class="text-3xl font-bold text-slate-900 dark:text-white" id="stat-scanned">0</div>
+                        </div>
+                        <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col transition-colors">
+                            <div class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">AI Detected</div>
+                            <div class="text-3xl font-bold text-slate-900 dark:text-white" id="stat-ai">0</div>
+                        </div>
+                        <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col transition-colors">
+                            <div class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Real Images</div>
+                            <div class="text-3xl font-bold text-slate-900 dark:text-white" id="stat-real">0</div>
+                        </div>
+                        <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col transition-colors">
+                            <div class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Avg. Confidence</div>
+                            <div class="text-3xl font-bold text-slate-900 dark:text-white" id="stat-conf">0%</div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Scan Panel -->
+                        <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden transition-colors">
+                            <div id="scan-loading" class="absolute inset-0 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm z-10 hidden flex flex-col items-center justify-center">
+                                <div class="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                                <h3 class="text-lg font-bold text-slate-900 dark:text-white">Checking C2PA, XMP, and perceptual fingerprints...</h3>
+                            </div>
+
+                            <h2 class="text-lg font-bold text-slate-900 dark:text-white mb-4">Provenance Evidence Scanner</h2>
+                            
+                            <!-- Dropzone -->
+                            <div id="drop-zone" class="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-12 text-center cursor-pointer transition-colors hover:border-blue-500 flex flex-col items-center justify-center mb-4 bg-slate-50 dark:bg-slate-900/50">
+                                <i data-feather="image" class="w-12 h-12 text-slate-400 mb-3"></i>
+                                <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Drag & drop your image here</p>
+                                <p class="text-xs text-slate-500 mt-2 mb-4">Supports JPEG, PNG, WEBP</p>
+                                <button class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-6 rounded-lg transition-colors shadow-sm">Browse Files</button>
+                                <input type="file" id="file-input" class="hidden" accept="image/*">
+                            </div>
+
+                            <div id="selected-preview" class="hidden mb-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-3">
+                                <div class="flex items-center gap-4">
+                                    <img id="preview-image" class="h-24 w-24 rounded-lg object-cover border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" alt="Selected image preview">
+                                    <div class="min-w-0 flex-1">
+                                        <div class="text-[10px] text-slate-500 uppercase font-bold mb-1">Current Image</div>
+                                        <div id="preview-name" class="font-semibold text-sm text-slate-800 dark:text-slate-100 truncate">---</div>
+                                        <div id="preview-meta" class="text-xs text-slate-500 dark:text-slate-400 mt-1">---</div>
+                                        <div id="preview-status" class="inline-flex mt-2 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 px-2 py-1 text-[10px] font-bold uppercase">Ready to analyze</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- URL Input -->
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i data-feather="link" class="w-4 h-4 text-slate-400"></i>
+                                </div>
+                                <input type="url" id="url-input" placeholder="Or enter image URL" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg pl-10 pr-24 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-colors dark:text-white">
+                                <button id="analyze-url-btn" class="absolute inset-y-1 right-1 bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 dark:hover:bg-slate-600 text-white px-4 rounded-md text-sm font-medium transition-colors">Analyze</button>
+                            </div>
+                        </div>
+
+                        <!-- Advanced Result Panel -->
+                        <div id="result-panel" class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col opacity-50 pointer-events-none transition-all duration-300">
+                            <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
+                                <h2 class="text-lg font-bold text-slate-900 dark:text-white">Evidence Report</h2>
+                                <span id="incident-badge" class="px-3 py-1 text-xs font-bold rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">WAITING</span>
+                            </div>
+                            
+                            <div class="p-6 flex-1 flex flex-col gap-6 overflow-y-auto">
+                                
+                                <!-- Core Result -->
+                                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-4">
+                                    <div>
+                                        <div class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Verdict</div>
+                                        <div id="res-prediction" class="text-2xl font-black text-slate-900 dark:text-white">---</div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Confidence</div>
+                                        <div id="res-confidence" class="text-3xl font-black text-blue-600 dark:text-blue-400">0%</div>
+                                    </div>
+                                </div>
+
+                                <!-- Metadata Grid -->
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700">
+                                        <div class="text-[10px] text-slate-500 uppercase mb-1">Likely Generator</div>
+                                        <div id="res-generator" class="font-semibold text-sm text-slate-800 dark:text-slate-200">---</div>
+                                    </div>
+                                    <div class="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700">
+                                        <div class="text-[10px] text-slate-500 uppercase mb-1">Inference Time</div>
+                                        <div id="res-time" class="font-semibold text-sm text-slate-800 dark:text-slate-200">---</div>
+                                    </div>
+                                    <div class="col-span-2 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700">
+                                        <div class="text-[10px] text-slate-500 uppercase mb-1">Image Metadata</div>
+                                        <div id="res-metadata" class="font-mono text-xs text-slate-600 dark:text-slate-400">---</div>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div class="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700">
+                                        <div class="text-[10px] text-slate-500 uppercase mb-1">C2PA Manifest</div>
+                                        <div id="res-c2pa" class="font-semibold text-sm text-slate-800 dark:text-slate-200">---</div>
+                                    </div>
+                                    <div class="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700">
+                                        <div class="text-[10px] text-slate-500 uppercase mb-1">EXIF / XMP</div>
+                                        <div id="res-xmp" class="font-semibold text-sm text-slate-800 dark:text-slate-200">---</div>
+                                    </div>
+                                    <div class="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700">
+                                        <div class="text-[10px] text-slate-500 uppercase mb-1">pHash DB</div>
+                                        <div id="res-phash" class="font-semibold text-sm text-slate-800 dark:text-slate-200">---</div>
+                                    </div>
+                                </div>
+
+                                <div class="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700">
+                                    <div class="text-[10px] text-slate-500 uppercase mb-1">Evidence Pipeline</div>
+                                    <div id="res-chain" class="space-y-2"></div>
+                                </div>
+
+                                <!-- Actions -->
+                                <div class="mt-auto pt-4">
+                                    <h4 class="text-xs font-bold text-slate-400 uppercase mb-3">Recommended Actions</h4>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <button id="save-fingerprint-btn" class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 py-2 rounded-lg text-sm font-semibold transition-colors">
+                                            Save Fingerprint
+                                        </button>
+                                        <button onclick="takeAction('report')" class="bg-red-50 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-500/30 py-2 rounded-lg text-sm font-semibold transition-colors">
+                                            Generate Report
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW: SCAN (Redirects to Dashboard logic visually for simplicity, but we'll show Dashboard) -->
+                
+                <!-- VIEW: HISTORY -->
+                <div id="view-history" class="view-section hidden space-y-6">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col">
+                        <div class="p-5 border-b border-slate-100 dark:border-slate-700">
+                            <h2 class="text-lg font-bold text-slate-900 dark:text-white">Scan History</h2>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm">
+                                <thead class="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 font-medium text-xs uppercase tracking-wider">
+                                    <tr>
+                                        <th class="px-5 py-3">Media</th>
+                                        <th class="px-5 py-3">Type</th>
+                                        <th class="px-5 py-3">AI Probability</th>
+                                        <th class="px-5 py-3">Generator</th>
+                                        <th class="px-5 py-3">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-700 text-slate-700 dark:text-slate-300" id="history-tbody">
+                                    <!-- Handled by mock data -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW: ABOUT -->
+                <div id="view-about" class="view-section hidden max-w-3xl">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl p-8 border border-slate-200 dark:border-slate-700 shadow-sm prose dark:prose-invert">
+                        <h2 class="text-2xl font-bold mb-4">About Truthify</h2>
+                        <p>Truthify is a hybrid AI Content Protection platform that combines a vision model with C2PA, EXIF/XMP inspection, and perceptual-hash similarity checks to detect synthetic and manipulated media.</p>
+                        <h3 class="text-xl font-bold mt-6 mb-2">Technology Stack</h3>
+                        <ul>
+                            <li><strong>Backend:</strong> FastAPI, Python</li>
+                            <li><strong>Frontend:</strong> HTML5, Tailwind CSS, JavaScript</li>
+                            <li><strong>Detection:</strong> Ensemble of Convolutional Neural Networks and Vision Transformers (Simulated)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- VIEW: SETTINGS -->
+                <div id="view-settings" class="view-section hidden max-w-2xl">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl p-8 border border-slate-200 dark:border-slate-700 shadow-sm">
+                        <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-6">Account Settings</h2>
+                        <form id="settings-form" class="space-y-6">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Display Name</label>
+                                <input type="text" id="settings-name" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Backend API URL</label>
+                                <input type="url" id="settings-api-url" placeholder="https://your-truthify-api.onrender.com" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white">
+                                <p class="text-sm text-slate-500 mt-2">Use this only after deploying the Python backend separately.</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Theme Preference</label>
+                                <p class="text-sm text-slate-500">Theme is toggled via the header icon and saved automatically.</p>
+                            </div>
+                            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors">Save Changes</button>
+                        </form>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <script>
+        feather.replace();
+
+        // ---------------- THEME LOGIC ----------------
+        const themeToggle = document.getElementById('theme-toggle');
+        const iconDark = document.getElementById('theme-icon-dark');
+        const iconLight = document.getElementById('theme-icon-light');
+        const htmlElement = document.documentElement;
+
+        function updateThemeIcons() {
+            if (htmlElement.classList.contains('dark')) {
+                iconDark.classList.remove('hidden');
+                iconLight.classList.add('hidden');
+            } else {
+                iconLight.classList.remove('hidden');
+                iconDark.classList.add('hidden');
+            }
+        }
+        updateThemeIcons();
+
+        themeToggle.addEventListener('click', () => {
+            htmlElement.classList.toggle('dark');
+            const isDark = htmlElement.classList.contains('dark');
+            localStorage.setItem('truthify_theme', isDark ? 'dark' : 'light');
+            updateThemeIcons();
+            showToast('Theme updated to ' + (isDark ? 'Dark' : 'Light'));
+        });
+
+        // ---------------- TOAST ----------------
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const color = type === 'success' ? 'bg-emerald-500' : 'bg-blue-500';
+            toast.className = `${color} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 text-sm font-medium toast-enter`;
+            toast.innerHTML = `<i data-feather="${type === 'success' ? 'check-circle' : 'info'}" class="w-4 h-4"></i> ${message}`;
+            container.appendChild(toast);
+            feather.replace();
+            
+            requestAnimationFrame(() => {
+                toast.classList.remove('toast-enter');
+                toast.classList.add('toast-enter-active');
+            });
+
+            setTimeout(() => {
+                toast.classList.remove('toast-enter-active');
+                toast.classList.add('toast-enter');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // ---------------- VIEW ROUTING ----------------
+        function switchView(viewId) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-link').forEach(el => {
+                el.classList.remove('bg-blue-50', 'dark:bg-blue-900/30', 'text-blue-700', 'dark:text-blue-400');
+                el.classList.add('text-slate-600', 'dark:text-slate-400');
+            });
+            
+            let targetView = viewId;
+            if (viewId === 'scan') targetView = 'dashboard'; // Scan is part of dashboard now
+            
+            document.getElementById(`view-${targetView}`).classList.remove('hidden');
+            
+            const activeNav = document.getElementById(`nav-${viewId}`);
+            if (activeNav) {
+                activeNav.classList.remove('text-slate-600', 'dark:text-slate-400');
+                activeNav.classList.add('bg-blue-50', 'dark:bg-blue-900/30', 'text-blue-700', 'dark:text-blue-400');
+            }
+        }
+
+        // ---------------- API HELPER ----------------
+        let API_BASE_URL = (window.TRUTHIFY_API_BASE_URL || localStorage.getItem('truthify_api_base') || '').replace(/\/$/, '');
+        function apiUrl(endpoint) {
+            return `${API_BASE_URL}${endpoint}`;
+        }
+
+        let authToken = localStorage.getItem('truthify_token');
+        let lastAnalysis = null;
+        document.getElementById('settings-api-url').value = API_BASE_URL;
+
+        async function apiCall(endpoint, method = 'GET', body = null) {
+            const headers = { 'Content-Type': 'application/json' };
+            if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+            
+            const options = { method, headers };
+            if (body) options.body = JSON.stringify(body);
+            
+            const res = await fetch(apiUrl(endpoint), options);
+            if (res.status === 401) {
+                authToken = null;
+                localStorage.removeItem('truthify_token');
+                throw new Error('Unauthorized');
+            }
+            return res.json();
+        }
+
+        // ---------------- INIT & AUTH ----------------
+        const loginModal = document.getElementById('login-modal');
+        document.getElementById('login-trigger-btn').addEventListener('click', () => loginModal.classList.remove('hidden'));
+        loginModal.addEventListener('click', (e) => { if (e.target === loginModal) loginModal.classList.add('hidden'); });
+
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            try {
+                const res = await fetch(apiUrl('/api/login'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                if (!res.ok) throw new Error('Invalid');
+                const data = await res.json();
+                authToken = data.token;
+                localStorage.setItem('truthify_token', authToken);
+                loginModal.classList.add('hidden');
+                initApp();
+                showToast('Logged in successfully');
+            } catch (err) {
+                document.getElementById('login-error').classList.remove('hidden');
+            }
+        });
+
+        async function initApp() {
+            if (!authToken) {
+                loadHistoryTable([]);
+                return;
+            }
+            try {
+                const user = await apiCall('/api/me');
+                document.getElementById('welcome-text').textContent = `Welcome back, ${user.name.split(' ')[0]} 👋`;
+                document.getElementById('settings-name').value = user.name;
+                document.getElementById('profile-area').innerHTML = `
+                    <div class="text-right hidden md:block">
+                        <p class="text-sm font-bold text-slate-900 dark:text-white leading-tight">${user.name}</p>
+                        <p class="text-xs font-medium text-blue-600 dark:text-blue-400">${user.role}</p>
+                    </div>
+                    <img src="${user.avatar}" class="w-10 h-10 rounded-full border-2 border-white dark:border-slate-800" alt="Profile">
+                    <button onclick="logout(event)" class="ml-2 text-slate-400 hover:text-slate-600 dark:hover:text-white"><i data-feather="log-out" class="w-4 h-4"></i></button>
+                `;
+                
+                // Fetch stats
+                const stats = await apiCall('/api/stats');
+                document.getElementById('stat-scanned').textContent = stats.images_scanned;
+                document.getElementById('stat-ai').textContent = stats.ai_detected;
+                document.getElementById('stat-real').textContent = stats.real_images;
+                document.getElementById('stat-conf').textContent = stats.avg_confidence;
+
+                // Fetch notifications
+                const notifs = await apiCall('/api/notifications');
+                updateNotifications(notifs);
+
+                const history = await apiCall('/api/history');
+                loadHistoryTable(history);
+                feather.replace();
+            } catch(e) {
+                console.log(e);
+            }
+        }
+
+        window.logout = function(e) {
+            e.stopPropagation();
+            localStorage.removeItem('truthify_token');
+            location.reload();
+        }
+
+        initApp(); // Run on load
+
+        // ---------------- NOTIFICATIONS ----------------
+        const notifBtn = document.getElementById('notif-btn');
+        const notifDropdown = document.getElementById('notif-dropdown');
+        notifBtn.addEventListener('click', () => notifDropdown.classList.toggle('hidden'));
+        document.addEventListener('click', (e) => {
+            if (!notifBtn.contains(e.target) && !notifDropdown.contains(e.target)) notifDropdown.classList.add('hidden');
+        });
+
+        function updateNotifications(notifs) {
+            const list = document.getElementById('notif-list');
+            const badge = document.getElementById('notif-badge');
+            if (notifs.length > 0) {
+                badge.classList.remove('hidden');
+                list.innerHTML = notifs.map(n => `
+                    <div class="p-3 border-b border-slate-100 dark:border-slate-700 flex gap-3 ${n.read ? 'opacity-60' : ''}">
+                        <i data-feather="info" class="w-4 h-4 text-blue-500 mt-0.5"></i>
+                        <span>${n.text}</span>
+                    </div>
+                `).join('');
+            } else {
+                badge.classList.add('hidden');
+                list.innerHTML = '<div class="p-3 text-slate-500 text-center">No notifications.</div>';
+            }
+            feather.replace();
+        }
+
+        function renderStepBadge(status) {
+            const clean = String(status || '').toLowerCase();
+            if (clean === 'found' || clean === 'match') return 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400';
+            if (clean === 'present' || clean === 'ready') return 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300';
+            if (clean === 'fallback') return 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300';
+            if (clean === 'none' || clean === 'no match' || clean === 'clean') return 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200';
+            return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300';
+        }
+
+        function renderAnalysisSignals(data) {
+            const c2pa = data.signals?.c2pa || {};
+            const xmp = data.signals?.xmp || {};
+            const phash = data.signals?.phash || {};
+            const chain = Array.isArray(data.analysis_chain) ? data.analysis_chain : [];
+
+            document.getElementById('res-c2pa').textContent = c2pa.status || '---';
+            const xmpText = xmp.keywords && xmp.keywords.length ? xmp.keywords.join(', ') : (data.metadata.software || 'No generator keywords');
+            document.getElementById('res-xmp').textContent = xmpText;
+            document.getElementById('res-phash').textContent = phash.match_found ? (phash.match_name + ' (' + phash.match_label + ', ' + phash.distance + ' bits)') : ('Signature ' + String(data.signature || '').slice(0, 12) + '...');
+
+            const chainRoot = document.getElementById('res-chain');
+            chainRoot.innerHTML = '';
+            chain.forEach((step) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-start justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/60 px-3 py-2';
+                const left = document.createElement('div');
+                const title = document.createElement('div');
+                title.className = 'font-semibold text-sm text-slate-800 dark:text-slate-100';
+                title.textContent = step.step;
+                const detail = document.createElement('div');
+                detail.className = 'text-xs text-slate-500 dark:text-slate-400';
+                detail.textContent = step.detail;
+                left.appendChild(title);
+                left.appendChild(detail);
+                const badge = document.createElement('span');
+                badge.className = 'px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ' + renderStepBadge(step.status);
+                badge.textContent = step.status;
+                row.appendChild(left);
+                row.appendChild(badge);
+                chainRoot.appendChild(row);
+            });
+        }
+
+        document.getElementById('clear-notif-btn').addEventListener('click', async () => {
+            try {
+                await apiCall('/api/notifications/clear', 'POST');
+                updateNotifications([]);
+            } catch(e) { alert('Login required'); }
+        });
+
+        document.getElementById('save-fingerprint-btn').addEventListener('click', async () => {
+            if (!lastAnalysis) {
+                showToast('Run a scan first', 'info');
+                return;
+            }
+            try {
+                const payload = {
+                    signature: lastAnalysis.signature,
+                    label: lastAnalysis.prediction === 'AI Generated' ? 'fake' : 'real',
+                    name: lastAnalysis.source_name || 'Reference sample',
+                    note: 'Saved from Truthify analysis'
+                };
+                const res = await apiCall('/api/library/add', 'POST', payload);
+                showToast(res.message);
+            } catch(e) { alert('Login required'); }
+        });
+
+        // ---------------- SETTINGS ----------------
+        document.getElementById('settings-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('settings-name').value;
+            const apiUrlValue = document.getElementById('settings-api-url').value.trim().replace(/\/$/, '');
+            API_BASE_URL = apiUrlValue;
+            if (apiUrlValue) {
+                localStorage.setItem('truthify_api_base', apiUrlValue);
+            } else {
+                localStorage.removeItem('truthify_api_base');
+            }
+
+            if (!authToken) {
+                showToast('Backend URL saved. Now log in to continue.');
+                return;
+            }
+
+            try {
+                await apiCall('/api/settings/update', 'POST', { name });
+                showToast('Settings saved successfully!');
+                initApp();
+            } catch(e) { alert('Login required'); }
+        });
+
+        // ---------------- ACTIONS ----------------
+        const reportModal = document.getElementById('report-modal');
+        document.getElementById('close-report-btn').addEventListener('click', () => reportModal.classList.add('hidden'));
+
+        window.takeAction = async function(type) {
+            try {
+                const res = await apiCall(`/api/actions/${type}`, 'POST');
+                showToast(res.message);
+                
+                if (type === 'report') {
+                    const isFake = document.getElementById('incident-badge').textContent === 'DETECTED';
+                    if (!isFake) {
+                        showToast('Image is authentic. No legal report needed.', 'info');
+                        return;
+                    }
+                    document.getElementById('report-date').textContent = new Date().toLocaleDateString();
+                    document.getElementById('report-ref').textContent = Math.floor(Math.random() * 1000000);
+                    document.getElementById('report-prob').textContent = document.getElementById('res-confidence').textContent;
+                    reportModal.classList.remove('hidden');
+                }
+            } catch(e) { alert('Login required'); }
+        }
+
+        // ---------------- HISTORY ----------------
+        function loadHistoryTable(data) {
+            const tbody = document.getElementById('history-tbody');
+            if(data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="px-5 py-8 text-center text-slate-500">Please log in to view history.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = data.map(row => {
+                const isFake = row.prob > 50;
+                return `
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                    <td class="px-5 py-4 font-medium">${row.media}</td>
+                    <td class="px-5 py-4">${row.type}</td>
+                    <td class="px-5 py-4 font-bold ${isFake ? 'text-red-500' : 'text-emerald-500'}">${row.prob}%</td>
+                    <td class="px-5 py-4">${row.gen}</td>
+                    <td class="px-5 py-4"><span class="px-2.5 py-1 rounded-md text-xs font-bold ${isFake ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'}">${row.status}</span></td>
+                </tr>
+            `}).join('');
+        }
+
+        // ---------------- SCANNING LOGIC ----------------
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const urlInput = document.getElementById('url-input');
+        let previewObjectUrl = null;
+
+        function setPreviewStatus(text, type = 'info') {
+            const status = document.getElementById('preview-status');
+            const classes = {
+                info: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',
+                success: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300',
+                error: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300'
+            };
+            status.className = `inline-flex mt-2 rounded-full px-2 py-1 text-[10px] font-bold uppercase ${classes[type] || classes.info}`;
+            status.textContent = text;
+        }
+
+        function updateSelectedPreview(file, url) {
+            const preview = document.getElementById('selected-preview');
+            const image = document.getElementById('preview-image');
+            const name = document.getElementById('preview-name');
+            const meta = document.getElementById('preview-meta');
+
+            if (previewObjectUrl) {
+                URL.revokeObjectURL(previewObjectUrl);
+                previewObjectUrl = null;
+            }
+
+            preview.classList.remove('hidden');
+            if (file) {
+                previewObjectUrl = URL.createObjectURL(file);
+                image.src = previewObjectUrl;
+                name.textContent = file.name || 'Uploaded image';
+                meta.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB | ${file.type || 'image file'}`;
+            } else {
+                image.src = url;
+                name.textContent = url;
+                meta.textContent = 'Remote image URL';
+            }
+            setPreviewStatus('Analyzing', 'info');
+        }
+
+        function handleDrop(e) { e.preventDefault(); e.stopPropagation(); dropZone.classList.remove('drag-active'); if (e.dataTransfer.files[0]) runAnalysis(e.dataTransfer.files[0], null); }
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-active'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-active'));
+        dropZone.addEventListener('drop', handleDrop);
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', function() { if(this.files[0]) runAnalysis(this.files[0], null); });
+        document.getElementById('analyze-url-btn').addEventListener('click', () => { if(urlInput.value) runAnalysis(null, urlInput.value); });
+
+        async function runAnalysis(file, url) {
+            document.getElementById('scan-loading').classList.remove('hidden');
+            document.getElementById('result-panel').classList.remove('opacity-50', 'pointer-events-none');
+            updateSelectedPreview(file, url);
+            
+            try {
+                let res;
+                if(file) {
+                    const fd = new FormData(); fd.append('file', file);
+                    res = await fetch(apiUrl('/api/analyze/file'), { method: 'POST', body: fd });
+                } else {
+                    res = await fetch(apiUrl('/api/analyze/url'), { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url}) });
+                }
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Analysis failed');
+                lastAnalysis = data;
+                renderAnalysisSignals(data);
+                
+                // Populate Result Panel
+                const isFake = data.confidence > 50;
+                document.getElementById('incident-badge').textContent = isFake ? 'DETECTED' : 'CLEAN';
+                document.getElementById('incident-badge').className = `px-3 py-1 text-xs font-bold rounded-full ${isFake ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'}`;
+                
+                document.getElementById('res-prediction').textContent = data.prediction;
+                document.getElementById('res-prediction').className = `text-2xl font-black ${isFake ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`;
+                
+                document.getElementById('res-confidence').textContent = data.confidence + '%';
+                document.getElementById('res-generator').textContent = data.generator;
+                document.getElementById('res-time').textContent = data.inference_time;
+                document.getElementById('res-metadata').innerHTML = `Format: ${data.metadata.format}<br>Dim: ${data.metadata.dimensions}<br>EXIF: ${data.metadata.exif_anomalies}`;
+                if (authToken) {
+                    const stats = await apiCall('/api/stats');
+                    document.getElementById('stat-scanned').textContent = stats.images_scanned;
+                    document.getElementById('stat-ai').textContent = stats.ai_detected;
+                    document.getElementById('stat-real').textContent = stats.real_images;
+                    document.getElementById('stat-conf').textContent = stats.avg_confidence;
+                    loadHistoryTable(await apiCall('/api/history'));
+                    updateNotifications(await apiCall('/api/notifications'));
+                }
+
+                feather.replace();
+                setPreviewStatus('Analyzed', 'success');
+            } catch(e) {
+                setPreviewStatus('Failed', 'error');
+                alert('Analysis failed. Is backend running?');
+            } finally {
+                document.getElementById('scan-loading').classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
