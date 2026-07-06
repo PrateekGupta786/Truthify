@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: truthify
+    runtime: python
+    plan: starter
+    buildCommand: "pip install --no-cache-dir -r requirements.txt && python -c 'import os; os.environ[\"HF_HUB_TIMEOUT\"] = \"600\"; from transformers import AutoImageProcessor, SiglipForImageClassification; AutoImageProcessor.from_pretrained(\"Ateeqq/ai-vs-human-image-detector\"); SiglipForImageClassification.from_pretrained(\"Ateeqq/ai-vs-human-image-detector\"); print(\"Model loaded\")'"
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port 8000"
+    envVars:
+      - key: HF_HUB_TIMEOUT
+        value: "600"
+      - key: HF_HOME
+        value: ".cache/huggingface"
+      - key: TRANSFORMERS_CACHE
+        value: ".cache/huggingface"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+    buildFilter:
+      paths:
+        - source: /

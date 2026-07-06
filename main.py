@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import secrets
 import time
 import urllib.parse
@@ -17,6 +18,10 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
 import torch
 from transformers import AutoImageProcessor, SiglipForImageClassification
+
+# Set Hugging Face timeout for deployment environments
+os.environ.setdefault('HF_HUB_TIMEOUT', '600')
+os.environ.setdefault('TRANSFORMERS_CACHE', '.cache/huggingface')
 
 RESAMPLE_LANCZOS = getattr(getattr(Image, "Resampling", Image), "LANCZOS", Image.BICUBIC)
 
@@ -209,9 +214,21 @@ def _find_best_reference_match(signature: str) -> Optional[dict[str, Any]]:
 def _load_model() -> None:
     try:
         print("\nStarting Truthify detector load...")
+        print(f"  Cache dir: {os.environ.get('TRANSFORMERS_CACHE', 'default')}")
+        print(f"  Timeout: {os.environ.get('HF_HUB_TIMEOUT', 'default')}s")
+        
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        processor = AutoImageProcessor.from_pretrained(MODEL_ID)
-        detector = SiglipForImageClassification.from_pretrained(MODEL_ID)
+        print(f"  Device: {device}")
+        
+        start = time.time()
+        print(f"⏳ Loading processor...")
+        processor = AutoImageProcessor.from_pretrained(MODEL_ID, timeout=600)
+        print(f"   ✓ Processor loaded ({time.time() - start:.1f}s)")
+        
+        print(f"⏳ Loading detector model...")
+        detector = SiglipForImageClassification.from_pretrained(MODEL_ID, timeout=600)
+        print(f"   ✓ Detector loaded ({time.time() - start:.1f}s)")
+        
         detector.to(device)
         detector.eval()
         app.state.device = device
@@ -219,11 +236,15 @@ def _load_model() -> None:
         app.state.detector = detector
         app.state.model_ready = True
         app.state.model_error = None
-        print(f"Model ready on {device}: {MODEL_ID}")
+        print(f"✓ Model ready on {device} after {time.time() - start:.1f}s")
     except Exception as exc:
         app.state.model_ready = False
         app.state.model_error = str(exc)
-        print(f"Model load failed, using heuristic fallback: {exc}")
+        import traceback
+        print(f"✗ Model load failed: {exc}")
+        print("  Deployment may have limited resources or network issues")
+        print("  App will use HEURISTIC FALLBACK MODE (metadata & hash matching only)")
+        traceback.print_exc()
 
 
 def _ai_label_index(id2label: dict[Any, Any]) -> int:
