@@ -4,7 +4,7 @@
 
 Truthify is a hybrid AI media authenticity detection platform that combines a **Vision Transformer (SigLIP)**, C2PA provenance checking, EXIF/XMP metadata scanning, and perceptual hashing (dHash) to identify AI-generated and synthetic images with high confidence.
 
-[![Open in Streamlit](https://truthify-caumredxytappbjgccvnxqo.streamlit.app/)](https://truthify.streamlit.app)
+Live Demo: [![Streamlit App](https://truthify-caumredxytappbjgccvnxqo.streamlit.app/)](https://truthify.streamlit.app)
 
 ---
 
