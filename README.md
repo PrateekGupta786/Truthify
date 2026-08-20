@@ -4,6 +4,8 @@
 
 Truthify is a hybrid AI media authenticity detection platform that combines a **Vision Transformer (SigLIP)**, C2PA provenance checking, EXIF/XMP metadata scanning, and perceptual hashing (dHash) to identify AI-generated and synthetic images with high confidence.
 
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://truthify.streamlit.app)
+
 ---
 
 ## ✨ How It Works
@@ -19,7 +21,17 @@ All signals are fused into a single confidence score and verdict.
 
 ---
 
-## 🚀 Getting Started
+## 🌐 Live Demo
+
+Try it instantly — no install required:
+
+👉 **[https://truthify.streamlit.app](https://truthify.streamlit.app)**
+
+> ⏳ First load downloads the AI model (~2GB). Subsequent runs are instant thanks to Streamlit's resource caching.
+
+---
+
+## 🚀 Getting Started (Local)
 
 ### Requirements
 - Python 3.11+
@@ -33,23 +45,23 @@ cd Truthify
 pip install -r requirements.txt
 ```
 
-**Option A — Web Dashboard (FastAPI)**
+**Option A — Streamlit UI (recommended)**
+```bash
+streamlit run streamlit_app.py
+```
+Opens automatically in your browser at `http://localhost:8501`.
+
+**Option B — Web Dashboard (FastAPI)**
 ```bash
 python run.py
 ```
 Open **[http://127.0.0.1:8000](http://127.0.0.1:8000)** · Login: `admin` / `password`
 
-**Option B — Streamlit UI**
-```bash
-streamlit run streamlit_app.py
-```
-Opens automatically in your browser.
-
 > ⏳ First launch downloads the AI model (~2GB). Takes 2–5 minutes. Subsequent launches are instant.
 
 ---
 
-## 🔐 Credentials
+## 🔐 Credentials (FastAPI Dashboard only)
 
 | Username | Password |
 |----------|----------|
@@ -61,14 +73,29 @@ Opens automatically in your browser.
 
 ```
 Truthify/
-├── main.py          # FastAPI backend & detection logic
-├── run.py           # Local server launcher
-├── requirements.txt # Dependencies
+├── streamlit_app.py     # Streamlit UI (primary interface & Streamlit Cloud entry point)
+├── main.py              # FastAPI backend & detection logic
+├── run.py               # Local FastAPI server launcher
+├── requirements.txt     # Python dependencies
+├── .streamlit/
+│   └── config.toml      # Streamlit Cloud theme & server config
 ├── static/
-│   └── index.html   # Web dashboard UI
+│   └── index.html       # FastAPI web dashboard UI
 └── data/
-    └── reference_hashes.json
+    └── reference_hashes.json   # Known AI image perceptual hash database
 ```
+
+---
+
+## ☁️ Deploy to Streamlit Cloud
+
+1. Push this repo to GitHub
+2. Go to **[share.streamlit.io](https://share.streamlit.io)** and sign in with GitHub
+3. Click **"New app"** → select this repo
+4. Set **Main file path** to `streamlit_app.py`
+5. Click **Deploy** — Streamlit Cloud handles the rest!
+
+> 💡 The `.streamlit/config.toml` file is already configured with a dark theme optimized for the app.
 
 ---
 
