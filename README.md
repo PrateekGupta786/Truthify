@@ -26,16 +26,24 @@ All signals are fused into a single confidence score and verdict.
 - ~3GB disk space (AI model auto-downloads once on first run)
 
 ### Install & Run
+
 ```bash
 git clone https://github.com/PrateekGupta786/Truthify.git
 cd Truthify
 pip install -r requirements.txt
-python run.py
 ```
 
-Open **[http://127.0.0.1:8000](http://127.0.0.1:8000)** in your browser.
+**Option A — Web Dashboard (FastAPI)**
+```bash
+python run.py
+```
+Open **[http://127.0.0.1:8000](http://127.0.0.1:8000)** · Login: `admin` / `password`
 
-**Login:** `admin` / `password`
+**Option B — Streamlit UI**
+```bash
+streamlit run streamlit_app.py
+```
+Opens automatically in your browser.
 
 > ⏳ First launch downloads the AI model (~2GB). Takes 2–5 minutes. Subsequent launches are instant.
 
