@@ -4,11 +4,11 @@
 
 Truthify is a hybrid AI media authenticity detection platform that combines a **Vision Transformer (SigLIP)**, C2PA provenance checking, EXIF/XMP metadata scanning, and perceptual hashing (dHash) to identify AI-generated and synthetic images with high confidence.
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://truthify.streamlit.app)
+[![Open in Streamlit](https://truthify-caumredxytappbjgccvnxqo.streamlit.app/)](https://truthify.streamlit.app)
 
 ---
 
-## ✨ How It Works
+##  How It Works
 
 Each uploaded image is passed through a **multi-signal evidence pipeline**:
 
@@ -21,7 +21,7 @@ All signals are fused into a single confidence score and verdict.
 
 ---
 
-## 🌐 Live Demo
+##  Live Demo
 
 Try it instantly — no install required:
 
@@ -31,7 +31,7 @@ Try it instantly — no install required:
 
 ---
 
-## 🚀 Getting Started (Local)
+##  Getting Started (Local)
 
 ### Requirements
 - Python 3.11+
@@ -87,16 +87,4 @@ Truthify/
 
 ---
 
-## ☁️ Deploy to Streamlit Cloud
 
-1. Push this repo to GitHub
-2. Go to **[share.streamlit.io](https://share.streamlit.io)** and sign in with GitHub
-3. Click **"New app"** → select this repo
-4. Set **Main file path** to `streamlit_app.py`
-5. Click **Deploy** — Streamlit Cloud handles the rest!
-
-> 💡 The `.streamlit/config.toml` file is already configured with a dark theme optimized for the app.
-
----
-
-*Submitted as part of the Edunet Foundation AI/ML Internship Capstone Project.*
