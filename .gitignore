@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+*.egg-info/
+dist/
+
+# Test images
+test_image.png
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Note: .cache/ is needed for model caching on deployment
+# Uncomment below only if you want to exclude cache from version control
+# .cache/
+# transformers_cache/
